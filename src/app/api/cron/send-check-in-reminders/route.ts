@@ -15,38 +15,42 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Find pending check-ins that are past due
-  const { data: pendingCheckIns } = await supabase
-    .from("check_ins")
-    .select("*, habits!inner(goal, id, user_id)")
-    .is("completed_at", null)
-    .lte("scheduled_at", new Date().toISOString());
+  // Find all habits in active coaching (phase 2)
+  const { data: activeHabits } = await supabase
+    .from("habits")
+    .select("id, goal, user_id")
+    .eq("phase", 2);
 
-  if (!pendingCheckIns || pendingCheckIns.length === 0) {
+  if (!activeHabits || activeHabits.length === 0) {
     return NextResponse.json({ sent: 0 });
   }
 
+  // Batch-fetch user emails in a single query
+  const userIds = activeHabits.map((h) => h.user_id);
+  const { data: users } = await supabase
+    .from("users")
+    .select("id, email")
+    .in("id", userIds);
+
+  const emailByUserId = Object.fromEntries(
+    (users || []).map((u) => [u.id, u.email])
+  );
+
+  // Send one reminder per active habit
   let sent = 0;
-
-  for (const checkIn of pendingCheckIns) {
-    // Get user email
-    const { data: user } = await supabase
-      .from("users")
-      .select("email")
-      .eq("id", checkIn.habits.user_id)
-      .single();
-
-    if (!user?.email) continue;
+  for (const habit of activeHabits) {
+    const email = emailByUserId[habit.user_id];
+    if (!email) continue;
 
     try {
       await sendCheckInReminderEmail({
-        to: user.email,
-        habitGoal: checkIn.habits.goal,
-        checkInUrl: `${process.env.NEXT_PUBLIC_APP_URL}/habit/${checkIn.habits.id}/check-in`,
+        to: email,
+        habitGoal: habit.goal,
+        checkInUrl: `${process.env.NEXT_PUBLIC_APP_URL}/habit/${habit.id}/check-in`,
       });
       sent++;
     } catch (e) {
-      console.error(`Failed to send reminder to ${user.email}:`, e);
+      console.error(`Failed to send reminder to ${email}:`, e);
     }
   }
 
