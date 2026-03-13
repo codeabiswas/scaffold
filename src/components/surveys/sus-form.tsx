@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { LikertScale } from "@/components/ui/likert-scale";
 
 const SUS_QUESTIONS = [
   "I think I would like to use this system frequently.",
@@ -27,13 +27,13 @@ const SUS_QUESTIONS = [
   "I needed to learn a lot of things before I could get going with this system.",
 ];
 
-const SUS_SCALE_LABELS: Record<number, string> = {
-  1: "Strongly disagree",
-  2: "Disagree",
-  3: "Neutral",
-  4: "Agree",
-  5: "Strongly agree",
-};
+const SUS_OPTIONS = [
+  { value: 1, label: "Strongly disagree" },
+  { value: 2, label: "Disagree" },
+  { value: 3, label: "Neutral" },
+  { value: 4, label: "Agree" },
+  { value: 5, label: "Strongly agree" },
+];
 
 function computeSusScore(responses: number[]): number {
   let sum = 0;
@@ -59,7 +59,7 @@ export function SusForm({
 }: {
   userId: string;
   habitId?: string;
-  phase: "onboarding" | "phase2" | "offboarding";
+  phase: "onboarding" | "active-coaching" | "offboarding";
   redirectTo?: string;
   onboardingStep?: number;
   onComplete?: () => void;
@@ -107,10 +107,29 @@ export function SusForm({
   }
 
   const isOnboarding = phase === "onboarding";
+  const isActiveCoaching = phase === "active-coaching";
+
+  const headerConfig = isOnboarding
+    ? {
+        title: "Onboarding Complete!",
+        subtitle:
+          "Your personalized plan is ready. Before you begin, we'd love a quick bit of feedback to help us improve Scaffold for future users.",
+        cardDescription:
+          "This survey helps the development team understand how intuitive the onboarding experience felt. Your honest responses are invaluable.",
+      }
+    : isActiveCoaching
+      ? {
+          title: "Active Coaching Complete!",
+          subtitle:
+            "Your habit is becoming second nature. Before we move on, we'd love a quick bit of feedback on how the coaching experience felt.",
+          cardDescription:
+            "This survey helps the development team understand how useful the active coaching phase was. Your honest responses are invaluable.",
+        }
+      : null;
 
   return (
     <div className="space-y-6">
-      {isOnboarding && (
+      {headerConfig && (
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 text-primary mb-2">
             <svg
@@ -128,10 +147,9 @@ export function SusForm({
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold">Onboarding Complete!</h2>
+          <h2 className="text-xl font-bold">{headerConfig.title}</h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Your personalized plan is ready. Before you begin, we&apos;d love a
-            quick bit of feedback to help us improve Scaffold for future users.
+            {headerConfig.subtitle}
           </p>
         </div>
       )}
@@ -140,8 +158,8 @@ export function SusForm({
         <CardHeader>
           <CardTitle>Usability Survey</CardTitle>
           <CardDescription>
-            {isOnboarding
-              ? "This survey helps the development team understand how intuitive the onboarding experience felt. Your honest responses are invaluable."
+            {headerConfig
+              ? headerConfig.cardDescription
               : "Please rate your experience with the system so far."}
           </CardDescription>
         </CardHeader>
@@ -151,20 +169,11 @@ export function SusForm({
               <Label className="text-base">
                 {i + 1}. {question}
               </Label>
-              <div className="px-2">
-                <Slider
-                  min={1}
-                  max={5}
-                  step={1}
-                  value={[responses[i]]}
-                  onValueChange={([val]) => setResponse(i, val)}
-                />
-                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                  <span>Strongly disagree</span>
-                  <span>Neutral</span>
-                  <span>Strongly agree</span>
-                </div>
-              </div>
+              <LikertScale
+                options={SUS_OPTIONS}
+                value={responses[i]}
+                onValueChange={(val) => setResponse(i, val)}
+              />
             </div>
           ))}
           <Button

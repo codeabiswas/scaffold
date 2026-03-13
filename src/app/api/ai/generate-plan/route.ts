@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getGroqClient, DEFAULT_MODEL } from "@/lib/groq";
 import {
   buildPlanGenerationPrompt,
+  buildGenericPlanGenerationPrompt,
   buildPlanRegenerationPrompt,
 } from "@/lib/prompts/plan-generation";
 
@@ -37,22 +38,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Get availability
-  const { data: calData } = await supabase
-    .from("calendar_availability")
-    .select("availability")
-    .eq("user_id", user.id)
-    .single();
+  let prompt: { system: string; user: string };
 
-  const prompt = buildPlanGenerationPrompt({
-    tipiScores: profile.tipi_scores,
-    hobbies: profile.hobbies || "",
-    goal: habit.goal,
-    targetDate: habit.target_date,
-    successCondition: habit.success_condition,
-    priorExperience: habit.prior_experience,
-    availability: calData?.availability || {},
-  });
+  if (profile.treatment === "a") {
+    // Treatment A: generic prompt (no personality, hobbies, or availability)
+    prompt = buildGenericPlanGenerationPrompt({
+      goal: habit.goal,
+      targetDate: habit.target_date,
+      successCondition: habit.success_condition,
+      priorExperience: habit.prior_experience,
+    });
+  } else {
+    // Treatment B: personalized prompt
+    const { data: calData } = await supabase
+      .from("calendar_availability")
+      .select("availability")
+      .eq("user_id", user.id)
+      .single();
+
+    prompt = buildPlanGenerationPrompt({
+      tipiScores: profile.tipi_scores,
+      hobbies: profile.hobbies || "",
+      goal: habit.goal,
+      targetDate: habit.target_date,
+      successCondition: habit.success_condition,
+      priorExperience: habit.prior_experience,
+      availability: calData?.availability || {},
+    });
+  }
 
   const messages: { role: "system" | "user"; content: string }[] = [
     { role: "system", content: prompt.system },

@@ -68,7 +68,15 @@ interface CustomSlot {
   end: string;
 }
 
-export function CalendarConnect({ userId }: { userId: string }) {
+export function CalendarConnect({
+  userId,
+  onboardingStep = 4,
+  nextUrl = "/onboarding?step=5",
+}: {
+  userId: string;
+  onboardingStep?: number;
+  nextUrl?: string;
+}) {
   const router = useRouter();
   const [availability, setAvailability] = useState<Record<string, string[]>>(
     {}
@@ -185,10 +193,10 @@ export function CalendarConnect({ userId }: { userId: string }) {
 
     await supabase
       .from("users")
-      .update({ onboarding_step: 4 })
+      .update({ onboarding_step: onboardingStep })
       .eq("id", userId);
 
-    router.push("/onboarding?step=5");
+    router.push(nextUrl);
   }
 
   return (
@@ -196,8 +204,9 @@ export function CalendarConnect({ userId }: { userId: string }) {
       <CardHeader>
         <CardTitle>Your Weekly Availability</CardTitle>
         <CardDescription>
-          Select the time slots when you&apos;re typically free. This helps us
-          schedule your habit at realistic times.
+          Select the time slots when you&apos;re typically free. You can select
+          multiple slots per day. This helps us schedule your habit at realistic
+          times.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

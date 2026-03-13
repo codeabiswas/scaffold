@@ -28,9 +28,13 @@ const FOLLOW_UP_PROMPTS: Record<PriorOutcome, string> = {
 export function GoalForm({
   userId,
   existingHabit,
+  onboardingStep = 3,
+  nextUrl = "/onboarding?step=4",
 }: {
   userId: string;
   existingHabit?: Habit | null;
+  onboardingStep?: number;
+  nextUrl?: string;
 }) {
   const router = useRouter();
   const [goal, setGoal] = useState(existingHabit?.goal || "");
@@ -94,13 +98,13 @@ export function GoalForm({
 
     const { error: profileError } = await supabase
       .from("users")
-      .update({ onboarding_step: 3 })
+      .update({ onboarding_step: onboardingStep })
       .eq("id", userId);
     if (profileError) {
       console.error("Failed to update profile:", profileError);
     }
 
-    router.push("/onboarding?step=4");
+    router.push(nextUrl);
   }
 
   // Validate all required fields including follow-up text boxes:

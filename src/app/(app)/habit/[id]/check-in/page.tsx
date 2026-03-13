@@ -12,10 +12,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SrbaiForm } from "@/components/surveys/srbai-form";
+import { SusForm } from "@/components/surveys/sus-form";
 import { ScaffoldBuilding } from "@/components/building/scaffold-building";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import type { Habit } from "@/lib/types";
+import type { Habit, Treatment } from "@/lib/types";
 
 type MissedReason = "schedule_conflict" | "no_motivation" | "forgot";
 type CheckInStep =
@@ -24,7 +25,10 @@ type CheckInStep =
   | "missed_reason"
   | "ai_response"
   | "success"
-  | "phase3_trigger";
+  | "coaching_sus"
+  | "phase3_trigger"
+  | "simple_complete"
+  | "offboarding_complete";
 
 const MISSED_OPTIONS: { value: MissedReason; label: string }[] = [
   { value: "schedule_conflict", label: "Schedule conflict" },
@@ -45,9 +49,12 @@ export default function CheckInPage() {
   const habitId = params.id as string;
 
   const [habit, setHabit] = useState<Habit | null>(null);
+  const [treatment, setTreatment] = useState<Treatment>("b");
+  const [userId, setUserId] = useState("");
   const [step, setStep] = useState<CheckInStep>("performed");
   const [missedReason, setMissedReason] = useState<MissedReason | "">("");
   const [aiResponse, setAiResponse] = useState("");
+  const [coachFarewell, setCoachFarewell] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [newFloors, setNewFloors] = useState(0);
@@ -64,6 +71,21 @@ export default function CheckInPage() {
         setHabit(data as Habit);
         setNewFloors(data.building_floors);
       }
+
+      // Fetch treatment from user profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+        const { data: profile } = await supabase
+          .from("users")
+          .select("treatment")
+          .eq("id", user.id)
+          .single();
+        if (profile?.treatment) {
+          setTreatment(profile.treatment as Treatment);
+        }
+      }
+
       setLoading(false);
     }
     load();
@@ -75,6 +97,46 @@ export default function CheckInPage() {
     } else {
       setStep("missed_reason");
     }
+  }
+
+  /**
+   * If this is the final offboarding check-in, fetch the coach farewell,
+   * save it, and mark the habit complete.
+   * Returns true if offboarding was triggered, false otherwise.
+   */
+  async function handleOffboardingComplete(): Promise<boolean> {
+    if (!habit?.needs_final_checkin) return false;
+
+    const supabase = createClient();
+
+    // Fetch AI coach farewell message
+    let message =
+      "You've built something incredible. Trust in what you've created.";
+    try {
+      const res = await fetch("/api/ai/offboarding-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ habitId }),
+      });
+      const data = await res.json();
+      if (data.message) message = data.message;
+    } catch {
+      // Use fallback message
+    }
+
+    // Save coach message, clear flag, mark phase 4
+    await supabase
+      .from("habits")
+      .update({
+        phase: 4,
+        needs_final_checkin: false,
+        final_coach_message: message,
+      })
+      .eq("id", habitId);
+
+    setCoachFarewell(message);
+    setStep("offboarding_complete");
+    return true;
   }
 
   async function handleSrbaiSubmit(score: number) {
@@ -137,6 +199,15 @@ export default function CheckInPage() {
       }
     }
 
+    // If this is the final offboarding check-in, skip the normal flow
+    if (habit.needs_final_checkin) {
+      await supabase.from("habits").update(updates).eq("id", habitId);
+      setNewFloors(updatedFloors);
+      await handleOffboardingComplete();
+      setSubmitting(false);
+      return;
+    }
+
     // Check if habit has become automatic:
     // Requires 3 consecutive (non-decay) SRBAI scores >= 6.0
     const { data: recentScores } = await supabase
@@ -153,10 +224,19 @@ export default function CheckInPage() {
       recentScores.every((s) => Number(s.score) >= 6.0);
 
     if (hitThreshold) {
-      updates.phase = 3;
-      await supabase.from("habits").update(updates).eq("id", habitId);
-      setNewFloors(updatedFloors);
-      setStep("phase3_trigger");
+      if (treatment === "a") {
+        // Treatment A: SUS → simple completion, skip offboarding
+        updates.phase = 4;
+        await supabase.from("habits").update(updates).eq("id", habitId);
+        setNewFloors(updatedFloors);
+        setStep("coaching_sus");
+      } else {
+        // Treatment B: SUS → offboarding flow
+        updates.phase = 3;
+        await supabase.from("habits").update(updates).eq("id", habitId);
+        setNewFloors(updatedFloors);
+        setStep("coaching_sus");
+      }
     } else {
       await supabase.from("habits").update(updates).eq("id", habitId);
       setNewFloors(updatedFloors);
@@ -230,6 +310,13 @@ export default function CheckInPage() {
       .from("habits")
       .update(habitUpdates)
       .eq("id", habitId);
+
+    // If this is the final offboarding check-in, trigger offboarding completion
+    if (habit.needs_final_checkin) {
+      await handleOffboardingComplete();
+      setSubmitting(false);
+      return;
+    }
 
     setStep("ai_response");
     setSubmitting(false);
@@ -365,6 +452,61 @@ export default function CheckInPage() {
               size="lg"
             >
               Begin Off-boarding
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "coaching_sus" && (
+        <SusForm
+          userId={userId}
+          habitId={habitId}
+          phase="active-coaching"
+          onComplete={() =>
+            setStep(treatment === "a" ? "simple_complete" : "phase3_trigger")
+          }
+        />
+      )}
+
+      {step === "simple_complete" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Congratulations!</CardTitle>
+            <CardDescription>
+              You&apos;ve built a real habit. Your consistency has paid off —
+              keep it going!
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ScaffoldBuilding floors={newFloors} phase={4} showScaffolding={false} />
+            <Button
+              onClick={() => router.push("/dashboard")}
+              className="w-full"
+              size="lg"
+            >
+              Back to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "offboarding_complete" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your Coach&apos;s Final Words</CardTitle>
+            <CardDescription>
+              Congratulations — you&apos;ve completed your final check-in. The
+              scaffolding is gone, and your building stands on its own.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-lg italic">&quot;{coachFarewell}&quot;</p>
+            <Button
+              onClick={() => router.push(`/habit/${habitId}`)}
+              className="w-full"
+              size="lg"
+            >
+              Back to Dashboard
             </Button>
           </CardContent>
         </Card>

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { Habit } from "@/lib/types";
+import type { Habit, Treatment } from "@/lib/types";
 
 export default async function HabitPage({
   params,
@@ -26,6 +26,14 @@ export default async function HabitPage({
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("treatment")
+    .eq("id", user.id)
+    .single();
+
+  const treatment: Treatment = (profile?.treatment as Treatment) || "b";
 
   const { data: habit } = await supabase
     .from("habits")
@@ -91,7 +99,8 @@ export default async function HabitPage({
         </Button>
       )}
 
-      {typedHabit.phase === 3 && (
+      {/* Treatment B only: offboarding flow cards */}
+      {treatment === "b" && typedHabit.phase === 3 && !typedHabit.needs_final_checkin && (
         <Card className="border-primary">
           <CardHeader>
             <CardTitle>Ready for off-boarding!</CardTitle>
@@ -107,6 +116,49 @@ export default async function HabitPage({
               </Link>
             </Button>
           </CardContent>
+        </Card>
+      )}
+
+      {treatment === "b" && typedHabit.phase === 3 && typedHabit.needs_final_checkin && (
+        <Card className="border-primary">
+          <CardHeader>
+            <CardTitle>Final check-in pending</CardTitle>
+            <CardDescription>
+              You have one last check-in scheduled. Complete it to finish your
+              journey.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild className="w-full" size="lg">
+              <Link href={`/habit/${id}/check-in`}>Perform Final Check-In</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Coach's Final Words — Treatment B only, permanent card after offboarding */}
+      {treatment === "b" && typedHabit.final_coach_message && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Coach&apos;s Final Words</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg italic text-muted-foreground">
+              &ldquo;{typedHabit.final_coach_message}&rdquo;
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Treatment A: simple completion indicator */}
+      {treatment === "a" && typedHabit.phase === 4 && (
+        <Card className="border-green-500">
+          <CardHeader>
+            <CardTitle>Habit Complete ✓</CardTitle>
+            <CardDescription>
+              Congratulations — you&apos;ve built a real habit. Keep it going!
+            </CardDescription>
+          </CardHeader>
         </Card>
       )}
 

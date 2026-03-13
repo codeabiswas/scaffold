@@ -2,26 +2,26 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { LikertScale } from "@/components/ui/likert-scale";
 
-const SRBAI_ITEMS = [
-  "do automatically",
-  "do without having to consciously remember",
-  "do without thinking",
-  "start doing before I realize I'm doing it",
+const SRBAI_SUFFIXES = [
+  "is something I do automatically.",
+  "is something I do without having to consciously remember.",
+  "is something I do without thinking.",
+  "is something I start doing before I realize I'm doing it.",
 ];
 
-const SCALE_LABELS: Record<number, string> = {
-  1: "Disagree strongly",
-  2: "Disagree moderately",
-  3: "Disagree a little",
-  4: "Neither agree nor disagree",
-  5: "Agree a little",
-  6: "Agree moderately",
-  7: "Agree strongly",
-};
+const AGREE_DISAGREE_OPTIONS = [
+  { value: 1, label: "Disagree strongly" },
+  { value: 2, label: "Disagree moderately" },
+  { value: 3, label: "Disagree a little" },
+  { value: 4, label: "Neither agree nor disagree" },
+  { value: 5, label: "Agree a little" },
+  { value: 6, label: "Agree moderately" },
+  { value: 7, label: "Agree strongly" },
+];
 
 export function SrbaiForm({
   habitDescription,
@@ -48,28 +48,22 @@ export function SrbaiForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>&quot;{habitDescription}&quot; is something I…</CardTitle>
+        <CardTitle>Habit Automaticity Check</CardTitle>
+        <CardDescription>
+          Rate how much you agree with each statement about your habit.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
-        {SRBAI_ITEMS.map((item, i) => (
+        {SRBAI_SUFFIXES.map((suffix, i) => (
           <div key={i} className="space-y-3">
             <Label className="text-base font-medium">
-              {i + 1}. {item}
+              {i + 1}. &quot;{habitDescription}&quot; {suffix}
             </Label>
-            <div className="px-2">
-              <Slider
-                min={1}
-                max={7}
-                step={1}
-                value={[responses[i]]}
-                onValueChange={([val]) => updateResponse(i, val)}
-              />
-              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>Disagree strongly</span>
-                <span>Neither agree nor disagree</span>
-                <span>Agree strongly</span>
-              </div>
-            </div>
+            <LikertScale
+              options={AGREE_DISAGREE_OPTIONS}
+              value={responses[i]}
+              onValueChange={(val) => updateResponse(i, val)}
+            />
           </div>
         ))}
         <Button

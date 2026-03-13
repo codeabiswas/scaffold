@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getGroqClient, DEFAULT_MODEL } from "@/lib/groq";
-import { buildCoachingResponsePrompt } from "@/lib/prompts/coaching-response";
+import {
+  buildCoachingResponsePrompt,
+  buildGenericCoachingResponsePrompt,
+} from "@/lib/prompts/coaching-response";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,14 +36,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const prompt = buildCoachingResponsePrompt({
-    tipiScores: profile.tipi_scores,
-    habitGoal: habit.goal,
-    habitDescription: habit.ai_plan?.habit || habit.goal,
-    missedReason,
-    consecutiveMisses: habit.consecutive_misses + 1,
-    currentSrbai: Number(habit.current_srbai),
-  });
+  let prompt: { system: string; user: string };
+
+  if (profile.treatment === "a") {
+    // Treatment A: generic coaching (no personality calibration)
+    prompt = buildGenericCoachingResponsePrompt({
+      habitGoal: habit.goal,
+      habitDescription: habit.ai_plan?.habit || habit.goal,
+      missedReason,
+      consecutiveMisses: habit.consecutive_misses + 1,
+      currentSrbai: Number(habit.current_srbai),
+    });
+  } else {
+    // Treatment B: personalized coaching
+    prompt = buildCoachingResponsePrompt({
+      tipiScores: profile.tipi_scores,
+      habitGoal: habit.goal,
+      habitDescription: habit.ai_plan?.habit || habit.goal,
+      missedReason,
+      consecutiveMisses: habit.consecutive_misses + 1,
+      currentSrbai: Number(habit.current_srbai),
+    });
+  }
 
   try {
     const completion = await getGroqClient().chat.completions.create({

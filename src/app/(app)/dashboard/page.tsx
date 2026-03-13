@@ -14,7 +14,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Habit } from "@/lib/types";
+import type { Habit, Treatment } from "@/lib/types";
+import { isOnboardingComplete } from "@/lib/treatment-config";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -30,16 +31,20 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  // If onboarding not complete, redirect
-  if (!profile || profile.onboarding_step < 6) {
-    redirect(`/onboarding?step=${(profile?.onboarding_step || 0) + 1}`);
-  }
-
   const { data: habits } = await supabase
     .from("habits")
     .select("*")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  // If onboarding not complete and no active habits exist, redirect to onboarding
+  const hasActiveHabits = (habits || []).some(
+    (h: Habit) => h.phase >= 2
+  );
+  const treatment: Treatment = (profile?.treatment as Treatment) || "b";
+  if (!hasActiveHabits && (!profile || !isOnboardingComplete(treatment, profile.onboarding_step))) {
+    redirect(`/onboarding?step=${(profile?.onboarding_step || 0) + 1}`);
+  }
 
   const typedHabits = (habits || []) as Habit[];
   const canCreateHabit = typedHabits.length < 1; // Beta: 1 habit max

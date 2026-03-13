@@ -30,10 +30,14 @@ export function AiPlan({
   userId,
   habit,
   profile,
+  onboardingStep = 5,
+  nextUrl = "/onboarding?step=6",
 }: {
   userId: string;
   habit: Habit;
   profile: User | null;
+  onboardingStep?: number;
+  nextUrl?: string;
 }) {
   const router = useRouter();
   const [plan, setPlan] = useState<AiPlanData | null>(
@@ -94,10 +98,17 @@ export function AiPlan({
 
     await supabase
       .from("users")
-      .update({ onboarding_step: 5 })
+      .update({ onboarding_step: onboardingStep })
       .eq("id", userId);
 
-    router.push("/onboarding?step=6");
+    // Send calendar invite email with .ics attachment (fire-and-forget)
+    fetch("/api/calendar-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habitId: habit.id }),
+    }).catch((e) => console.error("Failed to send calendar invite:", e));
+
+    router.push(nextUrl);
   }
 
   async function handleDislike() {
@@ -114,7 +125,7 @@ export function AiPlan({
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-16">
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mb-4" />
-          <p className="text-muted-foreground">Generating your personalized plan...</p>
+          <p className="text-muted-foreground">Generating your plan...</p>
         </CardContent>
       </Card>
     );
@@ -136,10 +147,11 @@ export function AiPlan({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Your Personalized Plan</CardTitle>
+        <CardTitle>Your Plan</CardTitle>
         <CardDescription>
-          Based on your personality, routines, and goals, here&apos;s what we
-          recommend.
+          {profile?.treatment === "a"
+            ? "Based on your goal, here\u2019s what we recommend."
+            : "Based on your personality, routines, and goals, here\u2019s what we recommend."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -186,18 +198,10 @@ export function AiPlan({
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={handleAccept}
               disabled={submitting}
-              className="col-span-1"
-            >
-              ❤️ Love it
-            </Button>
-            <Button
-              onClick={handleAccept}
-              disabled={submitting}
-              variant="secondary"
               className="col-span-1"
             >
               👍 Like it

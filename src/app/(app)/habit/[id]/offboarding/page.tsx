@@ -14,9 +14,16 @@ import {
 import { RevealAnimation } from "@/components/building/reveal-animation";
 import { ScaffoldBuilding } from "@/components/building/scaffold-building";
 import { SusForm } from "@/components/surveys/sus-form";
+import { CalendarInviteBanner } from "@/components/onboarding/calendar-invite-banner";
 import type { Habit, User } from "@/lib/types";
 
-type OffboardingStep = "reveal" | "admire" | "sus" | "independence" | "final_message" | "complete";
+type OffboardingStep =
+  | "reveal"
+  | "admire"
+  | "sus"
+  | "independence"
+  | "coach_farewell"
+  | "scheduled";
 
 export default function OffboardingPage() {
   const params = useParams();
@@ -26,8 +33,9 @@ export default function OffboardingPage() {
   const [habit, setHabit] = useState<Habit | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [step, setStep] = useState<OffboardingStep>("reveal");
-  const [finalMessage, setFinalMessage] = useState("");
+  const [coachMessage, setCoachMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -53,6 +61,12 @@ export default function OffboardingPage() {
         .eq("id", authUser.id)
         .single();
 
+      // Treatment A users should never reach the offboarding page
+      if (profile?.treatment === "a") {
+        router.push("/dashboard");
+        return;
+      }
+
       setHabit(habitData as Habit);
       setUser(profile as User);
       setLoading(false);
@@ -65,16 +79,11 @@ export default function OffboardingPage() {
   }, []);
 
   async function handleIndependenceYes() {
+    setSubmitting(true);
     const supabase = createClient();
-    await supabase
-      .from("habits")
-      .update({ phase: 4 })
-      .eq("id", habitId);
-    setStep("complete");
-  }
 
-  async function handleIndependenceNotYet() {
-    // Get AI final coaching message
+    // Fetch AI coach farewell message
+    let message = "You've built something incredible. Trust in what you've created.";
     try {
       const res = await fetch("/api/ai/offboarding-message", {
         method: "POST",
@@ -82,21 +91,36 @@ export default function OffboardingPage() {
         body: JSON.stringify({ habitId }),
       });
       const data = await res.json();
-      setFinalMessage(data.message || "You've built something incredible. Trust in what you've created.");
+      if (data.message) message = data.message;
     } catch {
-      setFinalMessage("You've built something incredible. Trust in what you've created.");
+      // Use fallback message
     }
-    setStep("final_message");
-  }
 
-  async function handleFinalComplete() {
-    const supabase = createClient();
+    // Save coach message and mark complete
     await supabase
       .from("habits")
-      .update({ phase: 4 })
+      .update({
+        phase: 4,
+        final_coach_message: message,
+      })
       .eq("id", habitId);
 
-    // Schedule a 1-week check-in
+    setCoachMessage(message);
+    setSubmitting(false);
+    setStep("coach_farewell");
+  }
+
+  async function handleIndependenceNotYet() {
+    setSubmitting(true);
+    const supabase = createClient();
+
+    // Flag habit as needing final check-in (stay in phase 3)
+    await supabase
+      .from("habits")
+      .update({ needs_final_checkin: true })
+      .eq("id", habitId);
+
+    // Schedule a 1-week check-in in the DB
     const oneWeekLater = new Date();
     oneWeekLater.setDate(oneWeekLater.getDate() + 7);
     await supabase.from("check_ins").insert({
@@ -104,7 +128,15 @@ export default function OffboardingPage() {
       scheduled_at: oneWeekLater.toISOString(),
     });
 
-    setStep("complete");
+    // Send .ics calendar invite for final check-in (fire-and-forget)
+    fetch("/api/calendar-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habitId, type: "final-checkin" }),
+    }).catch((e) => console.error("Failed to send final check-in invite:", e));
+
+    setSubmitting(false);
+    setStep("scheduled");
   }
 
   if (loading || !habit) {
@@ -185,55 +217,36 @@ export default function OffboardingPage() {
           <CardContent className="flex gap-4">
             <Button
               onClick={handleIndependenceYes}
+              disabled={submitting}
               className="flex-1"
               size="lg"
             >
-              Yes, I&apos;m ready
+              {submitting ? "Loading..." : "Yes, I'm ready"}
             </Button>
             <Button
               onClick={handleIndependenceNotYet}
+              disabled={submitting}
               variant="outline"
               className="flex-1"
               size="lg"
             >
-              Not yet
+              {submitting ? "Loading..." : "Not yet"}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {step === "final_message" && (
+      {step === "coach_farewell" && (
         <Card>
           <CardHeader>
-            <CardTitle>Your Coach&apos;s Final Message</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-lg italic">&quot;{finalMessage}&quot;</p>
-            <p className="text-sm text-muted-foreground">
-              We&apos;ve scheduled one final check-in in a week. After that,
-              you&apos;re fully on your own.
-            </p>
-            <Button
-              onClick={handleFinalComplete}
-              className="w-full"
-              size="lg"
-            >
-              I&apos;m Ready
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === "complete" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Congratulations!</CardTitle>
+            <CardTitle>Your Coach&apos;s Final Words</CardTitle>
             <CardDescription>
-              Your building stands on its own. The scaffolding has been removed.
-              You&apos;ve built a real habit.
+              Congratulations — you&apos;ve built a real habit. The scaffolding
+              is gone, and your building stands on its own.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <p className="text-lg italic">&quot;{coachMessage}&quot;</p>
             <Button
               onClick={() => router.push("/dashboard")}
               className="w-full"
@@ -243,6 +256,30 @@ export default function OffboardingPage() {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {step === "scheduled" && (
+        <div className="space-y-6">
+          <CalendarInviteBanner message="We've sent you a calendar reminder for your final check-in in one week. Open the attached .ics file to add it to your calendar." />
+          <Card>
+            <CardHeader>
+              <CardTitle>You&apos;re almost there</CardTitle>
+              <CardDescription>
+                We&apos;ve scheduled one final check-in in a week. After that,
+                you&apos;ll be fully on your own.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => router.push("/dashboard")}
+                className="w-full"
+                size="lg"
+              >
+                Back to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

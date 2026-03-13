@@ -6,6 +6,8 @@ export interface TipiScores {
   openness: number;
 }
 
+export type Treatment = "a" | "b";
+
 export interface User {
   id: string;
   email: string;
@@ -14,6 +16,7 @@ export interface User {
   tipi_scores: TipiScores | null;
   hobbies: string | null;
   onboarding_step: number;
+  treatment: Treatment;
   created_at: string;
 }
 
@@ -49,6 +52,8 @@ export interface Habit {
   consecutive_misses: number;
   current_srbai: number;
   streak_freeze_available: boolean;
+  final_coach_message: string | null;
+  needs_final_checkin: boolean;
   created_at: string;
 }
 
@@ -77,7 +82,7 @@ export interface SusScore {
   id: string;
   user_id: string;
   habit_id: string | null;
-  phase: "onboarding" | "phase2" | "offboarding";
+  phase: "onboarding" | "active-coaching" | "offboarding";
   responses: Record<string, number>;
   score: number;
   recorded_at: string;

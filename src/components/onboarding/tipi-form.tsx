@@ -4,33 +4,32 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { LikertScale } from "@/components/ui/likert-scale";
 import type { TipiScores } from "@/lib/types";
 
 const TIPI_ITEMS = [
-  "Extraverted, enthusiastic",
-  "Critical, quarrelsome",
-  "Dependable, self-disciplined",
-  "Anxious, easily upset",
-  "Open to new experiences, complex",
-  "Reserved, quiet",
-  "Sympathetic, warm",
-  "Disorganized, careless",
-  "Calm, emotionally stable",
-  "Conventional, uncreative",
+  "I see myself as someone who is extraverted and enthusiastic.",
+  "I see myself as someone who is critical and quarrelsome.",
+  "I see myself as someone who is dependable and self-disciplined.",
+  "I see myself as someone who is anxious and easily upset.",
+  "I see myself as someone who is open to new experiences and complex.",
+  "I see myself as someone who is reserved and quiet.",
+  "I see myself as someone who is sympathetic and warm.",
+  "I see myself as someone who is disorganized and careless.",
+  "I see myself as someone who is calm and emotionally stable.",
+  "I see myself as someone who is conventional and uncreative.",
 ];
 
-const SCALE_LABELS = [
-  "",
-  "Disagree strongly",
-  "Disagree moderately",
-  "Disagree a little",
-  "Neither agree nor disagree",
-  "Agree a little",
-  "Agree moderately",
-  "Agree strongly",
+const AGREE_DISAGREE_OPTIONS = [
+  { value: 1, label: "Disagree strongly" },
+  { value: 2, label: "Disagree moderately" },
+  { value: 3, label: "Disagree a little" },
+  { value: 4, label: "Neither agree nor disagree" },
+  { value: 5, label: "Agree a little" },
+  { value: 6, label: "Agree moderately" },
+  { value: 7, label: "Agree strongly" },
 ];
 
 function computeOceanScores(responses: number[]): TipiScores {
@@ -50,9 +49,13 @@ function computeOceanScores(responses: number[]): TipiScores {
 export function TipiForm({
   userId,
   existingScores,
+  onboardingStep = 1,
+  nextUrl = "/onboarding?step=2",
 }: {
   userId: string;
   existingScores?: TipiScores | null;
+  onboardingStep?: number;
+  nextUrl?: string;
 }) {
   const router = useRouter();
   const [responses, setResponses] = useState<number[]>(
@@ -78,17 +81,20 @@ export function TipiForm({
       .from("users")
       .update({
         tipi_scores: scores,
-        onboarding_step: 1,
+        onboarding_step: onboardingStep,
       })
       .eq("id", userId);
 
-    router.push("/onboarding?step=2");
+    router.push(nextUrl);
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>I see myself as someone who is...</CardTitle>
+        <CardTitle>Personality Profile</CardTitle>
+        <CardDescription>
+          Rate how well each statement describes you.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
         {TIPI_ITEMS.map((item, i) => (
@@ -96,20 +102,11 @@ export function TipiForm({
             <Label className="text-base font-medium">
               {i + 1}. {item}
             </Label>
-            <div className="px-2">
-              <Slider
-                min={1}
-                max={7}
-                step={1}
-                value={[responses[i]]}
-                onValueChange={([val]) => updateResponse(i, val)}
-              />
-              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>Disagree strongly</span>
-                <span>Neither agree nor disagree</span>
-                <span>Agree strongly</span>
-              </div>
-            </div>
+            <LikertScale
+              options={AGREE_DISAGREE_OPTIONS}
+              value={responses[i]}
+              onValueChange={(val) => updateResponse(i, val)}
+            />
           </div>
         ))}
         <Button

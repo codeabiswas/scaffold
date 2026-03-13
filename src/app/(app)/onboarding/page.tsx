@@ -6,7 +6,16 @@ import { GoalForm } from "@/components/onboarding/goal-form";
 import { CalendarConnect } from "@/components/onboarding/calendar-connect";
 import { AiPlan } from "@/components/onboarding/ai-plan";
 import { SusForm } from "@/components/surveys/sus-form";
+import { CalendarInviteBanner } from "@/components/onboarding/calendar-invite-banner";
 import { Progress } from "@/components/ui/progress";
+import {
+  getConfig,
+  getStepKey,
+  getStepTitle,
+  isOnboardingComplete,
+} from "@/lib/treatment-config";
+import type { Treatment } from "@/lib/types";
+import type { Habit } from "@/lib/types";
 
 export default async function OnboardingPage({
   searchParams,
@@ -27,14 +36,19 @@ export default async function OnboardingPage({
     .eq("id", user.id)
     .single();
 
+  const treatment: Treatment = (profile?.treatment as Treatment) || "b";
+  const config = getConfig(treatment);
   const step = parseInt(stepParam || "1", 10);
 
   // If onboarding already complete, go to dashboard
-  if (profile && profile.onboarding_step >= 6) {
+  if (
+    profile &&
+    isOnboardingComplete(treatment, profile.onboarding_step)
+  ) {
     redirect("/dashboard");
   }
 
-  // Get habit if one exists (for steps 4+)
+  // Get habit if one exists
   const { data: habits } = await supabase
     .from("habits")
     .select("*")
@@ -42,73 +56,92 @@ export default async function OnboardingPage({
     .order("created_at", { ascending: false })
     .limit(1);
 
-  const habit = habits?.[0];
+  const habit = habits?.[0] as Habit | undefined;
 
-  const STEP_TITLES = [
-    "",
-    "Personality Profile",
-    "Your Routines",
-    "Define Your Goal",
-    "Your Availability",
-    "Your Plan",
-    "Quick Survey",
-  ];
+  const stepKey = getStepKey(treatment, step);
+  const stepTitle = getStepTitle(treatment, step);
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">Onboarding</h1>
-        <p className="text-muted-foreground">Learning about the real you</p>
+        <p className="text-muted-foreground">{config.subtitle}</p>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Step {step} of 6: {STEP_TITLES[step]}
+            Step {step} of {config.totalSteps}: {stepTitle}
           </span>
-          <span>{Math.round((step / 6) * 100)}%</span>
+          <span>
+            {Math.round((step / config.totalSteps) * 100)}%
+          </span>
         </div>
-        <Progress value={(step / 6) * 100} />
+        <Progress value={(step / config.totalSteps) * 100} />
       </div>
 
-      {step === 1 && (
+      {stepKey === "tipi" && (
         <TipiForm
           userId={user.id}
           existingScores={profile?.tipi_scores}
+          onboardingStep={step}
+          nextUrl={`/onboarding?step=${step + 1}`}
         />
       )}
-      {step === 2 && (
+      {stepKey === "hobbies" && (
         <HobbiesForm
           userId={user.id}
           existingHobbies={profile?.hobbies}
+          onboardingStep={step}
+          nextUrl={`/onboarding?step=${step + 1}`}
         />
       )}
-      {step === 3 && <GoalForm userId={user.id} existingHabit={habit} />}
-      {step === 4 && <CalendarConnect userId={user.id} />}
-      {step === 5 && habit && (
-        <AiPlan userId={user.id} habit={habit} profile={profile} />
+      {stepKey === "goal" && (
+        <GoalForm
+          userId={user.id}
+          existingHabit={habit}
+          onboardingStep={step}
+          nextUrl={`/onboarding?step=${step + 1}`}
+        />
       )}
-      {step === 5 && !habit && (
+      {stepKey === "calendar" && (
+        <CalendarConnect
+          userId={user.id}
+          onboardingStep={step}
+          nextUrl={`/onboarding?step=${step + 1}`}
+        />
+      )}
+      {stepKey === "ai_plan" && habit && (
+        <AiPlan
+          userId={user.id}
+          habit={habit}
+          profile={profile}
+          onboardingStep={step}
+          nextUrl={`/onboarding?step=${step + 1}`}
+        />
+      )}
+      {stepKey === "ai_plan" && !habit && (
         <div className="rounded-lg border p-8 text-center space-y-4">
           <p className="text-muted-foreground">
             We couldn&apos;t find your habit. Please go back and complete the
             goal step first.
           </p>
           <a
-            href="/onboarding?step=3"
+            href={`/onboarding?step=${config.steps.indexOf("goal") + 1}`}
             className="inline-block text-primary underline"
           >
-            Go to Step 3
+            Go to Goal Step
           </a>
         </div>
       )}
-      {step === 6 && (
+      {stepKey === "sus" && <CalendarInviteBanner />}
+      {stepKey === "sus" && (
         <SusForm
           userId={user.id}
           habitId={habit?.id}
           phase="onboarding"
           redirectTo="/dashboard"
-          onboardingStep={6}
+          onboardingStep={config.totalSteps}
         />
       )}
     </div>

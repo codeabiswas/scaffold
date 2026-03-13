@@ -10,9 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 export function HobbiesForm({
   userId,
   existingHobbies,
+  onboardingStep = 2,
+  nextUrl = "/onboarding?step=3",
 }: {
   userId: string;
   existingHobbies?: string | null;
+  onboardingStep?: number;
+  nextUrl?: string;
 }) {
   const router = useRouter();
   const [hobbies, setHobbies] = useState(existingHobbies || "");
@@ -26,11 +30,11 @@ export function HobbiesForm({
       .from("users")
       .update({
         hobbies,
-        onboarding_step: 2,
+        onboarding_step: onboardingStep,
       })
       .eq("id", userId);
 
-    router.push("/onboarding?step=3");
+    router.push(nextUrl);
   }
 
   return (
