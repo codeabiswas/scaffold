@@ -54,6 +54,7 @@ export interface Habit {
   streak_freeze_available: boolean;
   final_coach_message: string | null;
   needs_final_checkin: boolean;
+  plan_dislikes: number;
   created_at: string;
 }
 
