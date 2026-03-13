@@ -112,6 +112,12 @@ export function AiPlan({
   }
 
   async function handleDislike() {
+    // Track dislike count — increment regardless of whether user regenerates
+    const supabase = createClient();
+    await supabase
+      .from("habits")
+      .update({ plan_dislikes: (habit.plan_dislikes ?? 0) + 1 })
+      .eq("id", habit.id);
     setShowFeedback(true);
   }
 

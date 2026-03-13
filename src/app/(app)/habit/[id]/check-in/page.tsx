@@ -209,7 +209,7 @@ export default function CheckInPage() {
     }
 
     // Check if habit has become automatic:
-    // Requires 3 consecutive (non-decay) SRBAI scores >= 6.0
+    // Requires 3 consecutive (non-decay) SRBAI scores >= 8.0
     const { data: recentScores } = await supabase
       .from("srbai_scores")
       .select("score")
@@ -221,7 +221,7 @@ export default function CheckInPage() {
     const hitThreshold =
       recentScores &&
       recentScores.length >= 3 &&
-      recentScores.every((s) => Number(s.score) >= 6.0);
+      recentScores.every((s) => Number(s.score) >= 8.0);
 
     if (hitThreshold) {
       if (treatment === "a") {
