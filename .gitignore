@@ -43,3 +43,6 @@ next-env.d.ts
 
 # MCP servers
 .mcp.json
+
+# Claude worktrees
+.claude/worktrees/
