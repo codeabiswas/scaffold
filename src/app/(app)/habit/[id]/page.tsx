@@ -46,6 +46,11 @@ export default async function HabitPage({
 
   const typedHabit = habit as Habit;
 
+  // If coaching SUS is pending, redirect to the survey page
+  if (typedHabit.needs_coaching_sus) {
+    redirect(`/habit/${id}/coaching-survey`);
+  }
+
   // Get recent check-ins for the list
   const { data: recentCheckIns } = await supabase
     .from("check_ins")

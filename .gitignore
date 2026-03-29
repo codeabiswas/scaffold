@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Claude worktrees
 .claude/worktrees/
+
+# Data snapshots (contains PII)
+data-snapshots/
